@@ -1,0 +1,341 @@
+# Pohdinta:
+# 19.12.2023 viimeisin toimiva versio, aikaisempaan 18 deadlineen palautin bugisen koodin jonka sain korjattua
+# Ohjelma toimii toivotulla tavalla sekä noudattaa annettuja ohjeita
+#
+#Ohjelmaa voisi parantaa jos saisi vapautettua rekistereitä, esimerkiksi niin että lookup table ei luotaisi aina uudelleen
+#Ohjelmaa voisi parannella parantamalla multiply toimintoa, tässä versiossa se vaatii paljon rekistereitä
+#
+#
+#Right shifting periaate on kuvattu täällä peter cordesin vastauksessa
+#https://stackoverflow.com/questions/55539625/how-to-perform-right-shift-in-y86-64-or-other-toy-isas-with-add-and-but-no-na
+#
+# - Ajonaikaisten käskyjen määrä: Tarkistimen testiaineston perusteella käskyjen määrä vaihteli 5-29,2 tuhannen välillä
+# eli olemme ainakin testiaineston perusteella alle 30k rajan
+#
+# Pullonkaulauksi sanoisin neliöjuuren, voisiko sen toteuttaa nopeammin ehkä, ei ole myöskään optimi luoda lookuptablea aina uudelleen
+#
+# - Optimoinnin tein tavalla
+# Lookup table neliöjuuren bitille jossa liikutaan neljän kertoimella. 
+# Multiply on kaksi erikokoista maskia riippuen kertojan koosta.
+# Lyhyin reitti viidellä kertomiseen on kaksi bitti siirtoa vasemmalle + alkuperäinen
+# lasketaan ensin +4 is perfect jos ei ole niin sitten -4
+
+main: 
+
+    irmovq array, %rbp
+    irmovq array, %rsp
+
+loop:
+    irmovq $0, %r8
+    popq %rax
+    pushq %rax
+    rrmovq %rax, %r13
+    
+    subq %r8, %r13
+    je endFibozero
+    call isFibo #palauttaa rax arvoon 
+    andq %rax, %rax
+    je loopPop
+    popq %rax
+    halt
+    
+loopPop:
+    popq %rax
+    jmp loop
+    
+    
+    
+endFibozero:
+    irmovq $0, %rax
+    halt
+    
+#taken
+#rax
+#rbx
+#rcx
+
+isFibo:
+    rrmovq %rax, %rbx
+    rrmovq %rax, %r12
+    call multiply #palauttaa rcx
+    rrmovq %rcx, %rbx
+    rrmovq %rcx, %rdx
+    addq %rbx, %rbx
+    addq %rbx, %rbx
+    addq %rcx, %rbx
+    irmovq $4, %rax
+    
+    addq %rax, %rbx
+    call isPS #palauttaa r8  
+    irmovq $1, %r9
+    subq %r8, %r9
+    je wasFibo
+    
+    irmovq $8, %r10
+    rrmovq %rax, %rdx
+    subq %r10, %rdx
+    rrmovq %rdx, %rbx
+    rrmovq %rdx, %rax
+    rrmovq %rdx, %rcx
+    call isPS
+    
+    irmovq $1, %r9
+    subq %r8, %r9
+    je wasFibo
+    
+    #wasn't fibo 
+    irmovq $4, %r9
+    addq %r9, %rdx
+    
+    irmovq $1, %rax
+    
+    ret
+    
+    
+wasFibo:
+    #jee we have fibonacci number
+    #lets put zero to rax and return
+    irmovq $0, %rax
+    ret
+    
+    
+    
+isPS:
+   rrmovq %rbx, %rdx 
+   call findBit
+   #rrmovq %r9, %r9
+   irmovq $0, %r10
+   call squareRoot #palauttaa r10
+   rrmovq %r10, %r12
+   rrmovq %r10, %rbx
+   rrmovq %rdx, %rax
+   call multiply #returns the value rcx
+   irmovq $0, %r8
+   irmovq $1, %r9
+   subq %rax, %rcx
+   cmove %r9, %r8
+   rrmovq %rax, %rcx
+   ret
+   
+stop:
+    halt
+#r9 contains bit
+#rbx contains orignal
+#rdx not be changed
+#rcx not be changed
+#r8 temp for cheching
+#r13 0 for checking
+#r10 is the squareroot we are building
+#rsi temp
+#rdi 
+
+    
+
+squareRoot:
+    
+    rrmovq %r9,%r8
+    irmovq $0,%r13
+    subq %r13,%r8
+    je squareRootDone
+    rrmovq %r10, %rsi
+    addq %r9, %rsi
+    rrmovq %rbx, %r11
+    subq %rsi, %r11
+    jge if
+    jmp else
+    
+if:
+    subq %rsi, %rbx
+    irmovq $0, %r8
+	irmovq $63, %r13
+	irmovq $1, %rsi
+    rrmovq %r10, %r14
+	call rshift
+	rrmovq %r14, %r10
+    addq %r9,%r10
+    call nextNumber
+    jmp squareRoot
+    
+else:
+    irmovq $0, %r8
+	irmovq $63, %r13
+	irmovq $1, %rsi
+	#rrmovq %r10, %r8
+	rrmovq %r10, %r14
+	call rshift
+	rrmovq %r14, %r10
+	call nextNumber
+	jmp squareRoot
+	
+	#r8 is the shifting be are building
+	#r14 is the final value and also input
+	#rdi is 1
+	#r13 is counter 
+rightshiftfinal:
+	
+	rrmovq %r8, %r14 
+	ret
+	
+rshift:                    
+    addq   %r8, %r8       
+
+    andq   %r14, %r14       
+    jge   MSB_zero          
+    xorq    %rsi,  %r8      
+  MSB_zero:
+
+    addq   %r14, %r14     
+
+    subq   %rsi, %r13
+    jne   rshift   
+	jmp rightshiftfinal
+	
+	
+squareRootDone:
+    ret
+    halt
+
+nextNumber:
+    irmovq $8, %r8
+    addq %r8, %rdi
+    mrmovq (%rdi), %r9
+    ret
+
+   
+findBit:
+
+    initTwoBit:
+        irmovq twobit,%r12
+        irmovq $16777216, %r13
+        rmmovq %r13, (%r12)
+        irmovq $4194304, %r13
+        rmmovq %r13, 8(%r12)
+        irmovq $1048576, %r13
+        rmmovq %r13,16(%r12)
+        irmovq $262144, %r13
+        rmmovq %r13,24(%r12)
+        irmovq $65536, %r13
+        rmmovq %r13,32(%r12)
+        irmovq $16384, %r13
+        rmmovq %r13,40(%r12)
+        irmovq $4096, %r13
+        rmmovq %r13,48(%r12)
+        irmovq $1024, %r13
+        rmmovq %r13,56(%r12)
+        irmovq $256, %r13
+        rmmovq %r13,64(%r12)
+        irmovq $64, %r13
+        rmmovq %r13,72(%r12)
+        irmovq $16, %r13
+        rmmovq %r13,80(%r12)
+        irmovq $4, %r13
+        rmmovq %r13,88(%r12)
+        irmovq $1, %r13
+        rmmovq %r13,96(%r12)
+        irmovq $0, %r13
+        rmmovq %r13,104(%r12)
+    
+     rrmovq %r12, %rdi
+     irmovq $0, %r9 #paluuarvo
+     
+    findMain:
+    
+    mrmovq (%rdi), %r9
+    rrmovq %r9, %r8
+    subq %rbx, %r8
+    jle endtest
+    #rrmovq %r12, %rdi
+    irmovq $8, %r8
+    addq %r8, %rdi
+    jmp findMain
+    
+endtest: 
+    #irmovq $8, %r8
+    #subq %r8, %rdi
+    #mrmovq (%rdi), %r9
+    ret
+   halt
+    
+#Multiply needs to multiply rbx    
+#rcx result
+#r9 mask
+#r10 max
+#rsi max smaller
+#rdx vertailu temp, counter
+#rdi vertailu max mask value
+#rbx multiply number
+#r13 vertailu temp
+#r8 1
+#r12 second number
+multiply:
+    
+    irmovq $1, %r8
+    
+    #result
+    irmovq $0, %rcx
+    
+    #mask
+    irmovq $1, %r9
+    
+    #max value
+    irmovq $4294967296, %r10
+    irmovq $65536, %rsi
+    
+    rrmovq %rsi, %rdx
+    subq %rbx, %rdx
+    cmovge %rsi, %r10
+    
+    #shift counter
+    irmovq $0, %rdx
+    
+peasantloop:
+    
+    #max value of mask
+    rrmovq %r10, %rdi
+    
+    #Value check if mask is bigger
+    subq %r9, %rdi
+    jl endpeasant
+    
+    #checks if bit in is 1 or 0
+    rrmovq %rbx, %r13
+    #mask 
+    andq %r9, %r13
+    jne notZero
+ 
+    addq %r8, %rdx
+    addq %r9, %r9
+    jmp peasantloop
+
+notZero:
+
+    #check if counter is bigger than 0
+    rrmovq %r12, %rdi
+    rrmovq %rdx, %r13
+    andq %r13, %r13
+    jle finally
+    
+shiftloop:
+    #while counter more than 0
+    addq %rdi, %rdi
+    subq %r8, %r13
+    jg shiftloop
+        
+finally:
+    addq %rdi, %rcx
+
+        #Switching mask from previous to next
+        #left shift mask
+    addq %r8, %rdx
+    addq %r9, %r9
+    jmp peasantloop
+        
+endpeasant:
+    ret
+    
+.pos 0x700
+    array:
+    
+.pos 0x500
+    twobit:
+    
