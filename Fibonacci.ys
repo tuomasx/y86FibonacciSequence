@@ -20,6 +20,18 @@
 # Lyhyin reitti viidellä kertomiseen on kaksi bitti siirtoa vasemmalle + alkuperäinen
 # lasketaan ensin +4 is perfect jos ei ole niin sitten -4
 
+#Example for giving the fibonacciSequence
+.pos 0
+   irmovq array,%r11     
+   irmovq $3,%r12        
+   rmmovq %r12,(%r11)
+   irmovq $5,%r12       
+   rmmovq %r12,8(%r11)
+   irmovq $8,%r12        
+   rmmovq %r12,16(%r11)
+   irmovq $0,%r12        
+   rmmovq %r12,24(%r11)
+# The main part
 main: 
 
     irmovq array, %rbp
